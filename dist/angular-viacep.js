@@ -44,20 +44,23 @@ angular.module('angular.viacep').directive('viaCep', [
       },
       link: function(scope, element, attrs, ngModelController) {
         var _get;
-        _get = function(cepValue) {
+        _get = function(cepValue, key) {
           if (viaCEPHelper.isValidCep(cepValue)) {
-            return viaCEPHelper.get(cepValue).then(function() {
+            return viaCEPHelper.get(cepValue, key).then(function() {
               return ngModelController.$setValidity('cep', true);
             }, function() {
               return ngModelController.$setValidity('cep', false);
             });
           }
         };
-        if (scope.viacepKey === 'cep') {
+        var cepKey = scope.viacepKey.split(".");
+        if (cepKey[0] === 'cep') {
           return scope.$watch(function() {
             return ngModelController.$modelValue;
           }, function(cepValue) {
-            return _get(cepValue);
+            var key = attrs.viaCep.match(/(?:\d*\.)?\d+/g);
+            key = key ? key[0] : '';
+            return _get(cepValue, key);
           });
         } else {
           return viaCEPHelper.registerMapper(scope.viacepKey, ngModelController);
@@ -74,54 +77,56 @@ angular.module('angular.viacep').factory('viaCEPHelper', [
     _mappers = {};
     _validKeys = ['cep', 'logradouro', 'complemento', 'bairro', 'localidade', 'uf', 'unidade', 'ibge', 'gia'];
     _registerMapper = function(viacepKey, modelController) {
-      if (!_isValidKey(viacepKey)) {
+      var cepKey = viacepKey.split(".");
+      if (!_isValidKey(cepKey[0])) {
         throw new TypeError("viacep key must be one of: " + _validKeys);
       }
       return _mappers[viacepKey] = modelController;
     };
-    _fillAddress = function(address) {
+    _fillAddress = function(address, modelKey) {
       var i, key, len, results;
       results = [];
       for (i = 0, len = _validKeys.length; i < len; i++) {
         key = _validKeys[i];
-        if (_mappers[key] !== void 0) {
-          _mappers[key].$setViewValue(address[key]);
-          results.push(_mappers[key].$render());
+        if (_mappers[key + modelKey] !== void 0) {
+          _mappers[key + modelKey].$setViewValue(address[key]);
+          results.push(_mappers[key + modelKey].$render());
         } else {
           results.push(void 0);
         }
       }
       return results;
     };
-    _cleanAddress = function(address) {
+    _cleanAddress = function(modelKey) {
       var i, key, len, results;
       results = [];
       for (i = 0, len = _validKeys.length; i < len; i++) {
         key = _validKeys[i];
-        if (_mappers[key] !== void 0) {
-          _mappers[key].$setViewValue('');
-          results.push(_mappers[key].$render());
+        if (_mappers[key + modelKey] !== void 0) {
+          _mappers[key + modelKey].$setViewValue('');
+          results.push(_mappers[key + modelKey].$render());
         } else {
           results.push(void 0);
         }
       }
       return results;
     };
-    _get = function(cepValue) {
+    _get = function(cepValue, key) {
       var deferred;
       deferred = $q.defer();
       viaCEP.get(cepValue).then(function(response) {
         deferred.resolve();
-        return _fillAddress(response);
+        return _fillAddress(response, key);
       }, function(response) {
         deferred.reject();
-        return _cleanAddress();
+        return _cleanAddress(key);
       });
       return deferred.promise;
     };
     _isValidKey = function(viacepKey) {
       var index;
-      index = _validKeys.indexOf(viacepKey);
+      var cepKey = viacepKey.split(".");
+      index = _validKeys.indexOf(cepKey[0]);
       if (index === -1) {
         return false;
       }
